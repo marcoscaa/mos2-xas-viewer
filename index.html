@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MoS2 XAS Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --border: #ddd;
+    --panel: #fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1e1e1e; --fg: #eee; --muted: #aaa; --border: #444; --panel: #262626; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0 0 .25rem 0; font-size: 1.3rem; }
+  header p { margin: 0; color: var(--muted); font-size: .9rem; }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+  .controls label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .25rem; }
+  select {
+    font-size: .95rem;
+    padding: .35rem .5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--fg);
+    min-width: 220px;
+  }
+  .meta { font-size: .85rem; color: var(--muted); }
+
+  .panels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+  }
+  .panel {
+    flex: 1 1 480px;
+    min-width: 320px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    overflow: hidden;
+  }
+  .panel h2 {
+    font-size: .95rem;
+    margin: 0;
+    padding: .6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-weight: 600;
+  }
+  #viewer { width: 100%; height: 480px; position: relative; }
+  #plot { width: 100%; height: 480px; }
+
+  footer { padding: 1rem 1.5rem; color: var(--muted); font-size: .8rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MoS<sub>2</sub> XAS Viewer</h1>
+  <p>Relaxed structure (left) and simulated XAS/XPS spectrum (right) for each system and absorption edge.</p>
+</header>
+
+<div class="controls">
+  <div>
+    <label for="system-select">System</label>
+    <select id="system-select"></select>
+  </div>
+  <div>
+    <label for="edge-select">Absorber / edge</label>
+    <select id="edge-select"></select>
+  </div>
+  <div class="meta" id="meta"></div>
+</div>
+
+<div class="panels">
+  <div class="panel">
+    <h2>Atomic structure</h2>
+    <div id="viewer"></div>
+  </div>
+  <div class="panel">
+    <h2>XAS spectrum</h2>
+    <div id="plot"></div>
+  </div>
+</div>
+
+<footer>Drag to rotate, scroll to zoom the structure. Click legend entries in the spectrum to toggle curves.</footer>
+
+<script>
+let DATA = null;
+let glviewer = null;
+
+const systemLabels = {
+  "pristine": "Pristine MoS2 (monolayer)",
+  "pristine_2H": "Pristine 2H MoS2 (bilayer)",
+};
+function labelFor(key) {
+  if (systemLabels[key]) return systemLabels[key];
+  const m = key.match(/^substitutional\/(\w+)_at_(\w+)$/);
+  if (m) return `${m[1]} substituted at ${m[2]} site`;
+  const m2 = key.match(/^adsorbates\/(\w+)_(\w+)$/);
+  if (m2) return `${m2[1]} adsorbed at ${m2[2]}`;
+  return key;
+}
+
+function edgeLabel(edge) {
+  return edge.replace(/_/g, " ");
+}
+
+async function main() {
+  const res = await fetch("data.json");
+  DATA = await res.json();
+
+  const sysSelect = document.getElementById("system-select");
+  const keys = Object.keys(DATA.systems).sort();
+  for (const key of keys) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = labelFor(key);
+    sysSelect.appendChild(opt);
+  }
+
+  glviewer = $3Dmol.createViewer(document.getElementById("viewer"), { backgroundColor: "white" });
+
+  sysSelect.addEventListener("change", () => loadSystem(sysSelect.value));
+  document.getElementById("edge-select").addEventListener("change", () => {
+    const sysKey = sysSelect.value;
+    const edge = document.getElementById("edge-select").value;
+    plotEdge(sysKey, edge);
+  });
+
+  loadSystem(keys[0]);
+}
+
+function loadSystem(key) {
+  const sys = DATA.systems[key];
+
+  document.getElementById("meta").textContent =
+    `formula: ${sys.formula}  |  ${sys.natoms} atoms`;
+
+  glviewer.clear();
+  glviewer.addModel(sys.cif, "cif");
+  glviewer.addUnitCell();
+  glviewer.setStyle({}, { stick: { radius: 0.12 }, sphere: { scale: 0.28 } });
+  glviewer.zoomTo();
+  glviewer.render();
+
+  const edgeSelect = document.getElementById("edge-select");
+  edgeSelect.innerHTML = "";
+  const edgeKeys = Object.keys(sys.edges);
+  for (const edge of edgeKeys) {
+    const opt = document.createElement("option");
+    opt.value = edge;
+    opt.textContent = edgeLabel(edge);
+    edgeSelect.appendChild(opt);
+  }
+  plotEdge(key, edgeKeys[0]);
+}
+
+function plotEdge(sysKey, edge) {
+  const d = DATA.systems[sysKey].edges[edge];
+  const traces = [
+    { x: d.energy, y: d.avg, name: "avg (no SOC/broadening)", visible: "legendonly" },
+    { x: d.energy, y: d.soc, name: "+ SOC doublet", visible: "legendonly" },
+    { x: d.energy, y: d.soc_gauss, name: "+ SOC + Gaussian" },
+  ];
+  const layout = {
+    margin: { t: 20, r: 20, b: 50, l: 60 },
+    xaxis: { title: "Energy (eV)" },
+    yaxis: { title: "XPS intensity (a.u.)" },
+    legend: { orientation: "h", y: -0.2 },
+  };
+  Plotly.newPlot("plot", traces, layout, { responsive: true });
+}
+
+main();
+</script>
+
+</body>
+</html>
