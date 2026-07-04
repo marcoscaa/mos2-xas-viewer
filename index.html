@@ -84,7 +84,7 @@
 
 <header>
   <h1>MoS<sub>2</sub> XAS Viewer</h1>
-  <p>Relaxed structure (left) and simulated XAS/XPS spectrum (right) for each system and absorption edge.</p>
+  <p>Relaxed structure (left) and simulated XAS spectrum (right) for each system and absorption edge.</p>
 </header>
 
 <div class="controls">
@@ -193,7 +193,7 @@ function plotEdge(sysKey, edge) {
   const layout = {
     margin: { t: 20, r: 20, b: 50, l: 60 },
     xaxis: { title: "Energy (eV)" },
-    yaxis: { title: "XPS intensity (a.u.)" },
+    yaxis: { title: "XAS intensity (a.u.)" },
     legend: { orientation: "h", y: -0.2 },
   };
   Plotly.newPlot("plot", traces, layout, { responsive: true });

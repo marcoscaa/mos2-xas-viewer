@@ -1,6 +1,6 @@
 # MoS2 XAS Viewer
 
-Static, self-contained viewer for relaxed structures + simulated XAS/XPS spectra
+Static, self-contained viewer for relaxed structures + simulated XAS spectra
 of pristine and doped MoS2 systems. Pick a system and an absorption edge to see
 the 3D structure (3Dmol.js) and spectrum (Plotly.js) side by side.
 
