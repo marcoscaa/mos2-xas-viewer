@@ -109,12 +109,33 @@ def atoms_to_cif_string(atoms: Atoms) -> str:
         return Path(tmp.name).read_text()
 
 
+def is_stale(edge_dir: Path) -> bool:
+    """True if any xspectra polarization predates the edge's own
+    pw.scf.coreh.out -- i.e. it was computed against a since-superseded
+    core-hole SCF (e.g. a relaxed-coordinate fix triggered a coreh rerun,
+    but not all of x/y/z have been resubmitted yet). Averaging polarizations
+    from two different coreh states is not physically meaningful, so such an
+    edge must be excluded until all three are refreshed."""
+    coreh_out = edge_dir / "pw.scf.coreh.out"
+    if not coreh_out.exists():
+        return False
+    coreh_mtime = coreh_out.stat().st_mtime
+    for c in "xyz":
+        out = edge_dir / f"xanes_{c}.out"
+        if not out.exists() or out.stat().st_mtime < coreh_mtime:
+            return True
+    return False
+
+
 def load_edges(sys_dir: Path):
     edges = {}
     xanes_dir = sys_dir / "03_xanes"
     for d in sorted(xanes_dir.glob("*/")):
         spec = d / "spectrum.dat"
         if not spec.exists():
+            continue
+        if is_stale(d):
+            print(f"  [skip] {d.name}: stale vs. current pw.scf.coreh.out")
             continue
         data = np.loadtxt(spec)
         edges[d.name] = {
@@ -132,8 +153,11 @@ def main():
         sys_dir = SYSTEMS_ROOT / key
         print(f"processing {key} ...")
         atoms = get_relaxed_structure(sys_dir)
-        cif = atoms_to_cif_string(atoms)
         edges = load_edges(sys_dir)
+        if not edges:
+            print(f"  skipping {key}: no self-consistent edges right now")
+            continue
+        cif = atoms_to_cif_string(atoms)
         out["systems"][key] = {
             "formula": atoms.get_chemical_formula(),
             "natoms": len(atoms),
