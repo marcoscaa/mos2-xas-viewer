@@ -21,6 +21,27 @@ SYSTEMS_ROOT = CALC_ROOT / "systems"
 READY_SYSTEMS = [
     "pristine",
     "pristine_2H",
+    "adsorbates/Co_hollow",
+    "adsorbates/Co_Motop",
+    "adsorbates/Co_Stop",
+    "adsorbates/Cr_hollow",
+    "adsorbates/Cr_Motop",
+    "adsorbates/Cu_hollow",
+    "adsorbates/Cu_Motop",
+    "adsorbates/Cu_Stop",
+    "adsorbates/Fe_hollow",
+    "adsorbates/Fe_Motop",
+    "adsorbates/Mn_hollow",
+    "adsorbates/Mn_Motop",
+    "adsorbates/Mn_Stop",
+    "adsorbates/Ti_hollow",
+    "adsorbates/Ti_Stop",
+    "adsorbates/V_hollow",
+    "adsorbates/V_Stop",
+    "adsorbates/Zn_hollow",
+    "adsorbates/Zn_Motop",
+    "adsorbates/Zn_Stop",
+    "substitutional/Co_at_Mo",
     "substitutional/Cr_at_Mo",
     "substitutional/Cr_at_S",
     "substitutional/Cu_at_Mo",
@@ -152,10 +173,15 @@ def main():
     for key in READY_SYSTEMS:
         sys_dir = SYSTEMS_ROOT / key
         print(f"processing {key} ...")
-        atoms = get_relaxed_structure(sys_dir)
         edges = load_edges(sys_dir)
         if not edges:
             print(f"  skipping {key}: no self-consistent edges right now")
+            continue
+        try:
+            atoms = get_relaxed_structure(sys_dir)
+        except ValueError as e:
+            print(f"  skipping {key}: edges are self-consistent but ion relaxation "
+                  f"hasn't converged yet ({e})")
             continue
         cif = atoms_to_cif_string(atoms)
         out["systems"][key] = {
